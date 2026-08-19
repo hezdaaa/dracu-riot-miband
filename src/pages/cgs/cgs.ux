@@ -1,0 +1,351 @@
+<template>
+    <div class="page">
+      <img class="bcg" src="/common/bg/空_夕.jpg" />
+      <img class="bt" src="/common/bt.png" />
+      <img class="hd" src="/common/hd.png" />
+
+      <!-- 主菜单 -->
+      <div class="page2" if="{{jump === true}}">
+        <div class="header">
+          <text class="title">鉴赏模式</text>
+        </div>
+        <div class="content" onclick="showcg">
+          <text class="mid">CG鉴赏</text>
+        </div>
+        <div class="content" onclick="showlh">
+          <text class="mid">立绘鉴赏</text>
+        </div>
+      </div>
+
+      <!-- CG鉴赏页面: 组 + 变体切换 -->
+      <div class="page2" if="{{cgshow === true}}">
+        <image class="cgimg" src="{{currentCG}}" onclick="hidcgui"></image>
+        <img class="bt" src="/common/bt.png" if="{{cguishow}}" />
+        <img class="hd" src="/common/hd.png" if="{{cguishow}}" />
+        <div class="header">
+          <text class="title" if="{{cguishow}}">CG鉴赏</text>
+        </div>
+        <div class="info-container" if="{{cguishow}}">
+          <text class="info-text">组: {{cgGroupIndex + 1}}/{{cgGroups.length}} {{currentGroupName}}</text>
+          <text class="info-text">变体: {{cgVariantIndex + 1}}/{{currentGroupVariants}}</text>
+        </div>
+        <!-- 组切换 -->
+        <img class="last-btn" src="/common/back.png" if="{{cguishow}}" onclick="lastcgGroup" />
+        <img class="enter-btn" src="/common/go.png" if="{{cguishow}}" onclick="entercgGroup" />
+        <!-- 变体切换 -->
+        <img class="last-btn2" src="/common/back.png" if="{{cguishow}}" onclick="lastcgVariant" />
+        <img class="enter-btn2" src="/common/go.png" if="{{cguishow}}" onclick="entercgVariant" />
+      </div>
+
+      <!-- 立绘鉴赏页面: 角色+身体+表情叠加 -->
+      <div class="page2" if="{{lhshow === true}}">
+        <image class="backgroundimg" src="{{currentBg}}" onclick="hidlhch"></image>
+        <div class="lh-wrap" onclick="hidlhui" if="{{lhchshow}}">
+          <image class="character" src="{{currentChar}}" if="{{currentChar}}"
+                 style="left: {{bodyLeft}}px; top: {{bodyTop}}px; width: {{bodyW}}px; height: {{bodyH}}px;"></image>
+          <image class="faceimg" src="{{currentFace}}" if="{{currentFace}}"
+                 style="left: {{bodyLeft + faceX }}px; top: {{bodyTop + faceY }}px; width: {{faceW}}px; height: {{faceH}}px;"></image>
+        </div>
+        <img class="bt" src="/common/bt.png" if="{{lhuishow}}" />
+        <img class="hd" src="/common/hd.png" if="{{lhuishow}}" />
+        <div class="header">
+          <text class="title" if="{{lhuishow}}">立绘鉴赏</text>
+        </div>
+        <div class="info-container" if="{{lhuishow}}">
+          <text class="info-text">背景: {{bgIndex + 1}}/{{backgroundList.length}}</text>
+          <text class="info-text">角色: {{charIndex + 1}}/{{characters.length}}</text>
+          <text class="info-text">身体: {{bodyIndex + 1}}/{{currentCharBodies}} {{currentBodyName}}</text>
+          <text class="info-text">表情: {{faceIndex + 1}}/{{currentCharFaces}}</text>
+        </div>
+        <!-- 背景切换 -->
+        <img class="last-btn1" src="/common/back.png" onclick="lastcgb" if="{{lhuishow}}" />
+        <img class="enter-btn1" src="/common/go.png" onclick="entercgb" if="{{lhuishow}}" />
+        <!-- 角色切换 -->
+        <img class="last-btn" src="/common/back.png" onclick="lastlh" if="{{lhuishow}}" />
+        <img class="enter-btn" src="/common/go.png" onclick="enterlh" if="{{lhuishow}}" />
+        <!-- 身体切换 -->
+        <img class="last-btn2" src="/common/back.png" onclick="lastBody" if="{{lhuishow}}" />
+        <img class="enter-btn2" src="/common/go.png" onclick="enterBody" if="{{lhuishow}}" />
+        <!-- 表情切换 -->
+        <img class="last-btn3" src="/common/back.png" onclick="lastFace" if="{{lhuishow}}" />
+        <img class="enter-btn3" src="/common/go.png" onclick="enterFace" if="{{lhuishow}}" />
+      </div>
+      <img class="back-btn" src="/common/back.png" onclick="back" if="{{jump || (cgshow && cguishow) || (lhshow && lhuishow)}}" />
+    </div>
+  </template>
+
+  <script>
+    import file from '@system.file'
+    import router from '@system.router'
+
+    export default {
+      data: {
+        jump: true,
+        cgshow: false,
+        lhshow: false, 
+        cguishow: true,
+        lhuishow: true,
+        lhchshow: true,
+        // CG
+        cgGroups: [], cgGroupIndex: 0, cgVariantIndex: 0,
+        currentCG: '', currentGroupName: '', currentGroupVariants: 0,
+        // 立绘
+        characters: [], charIndex: 0, bodyIndex: 0, faceIndex: 0,
+        currentChar: '', currentFace: '', currentBodyName: '', currentPose: '1', poseFaces: [],
+        currentCharBodies: 0, currentCharFaces: 0,
+        faceX: 0, faceY: 0, faceW: 0, faceH: 0, bodyLeft: 0, bodyTop: 0, bodyW: 100, bodyH: 480,
+        // 背景
+        backgrounds: [], bgIndex: 0, currentBg: '',
+        scale: 0.35,
+        rules: null
+      },
+
+      onInit() {
+        this.loadRules();
+        this.loadBackgrounds();
+      },
+
+      loadRules() {
+        file.readText({
+          uri: '/common/gallery_rules.txt',
+          success: (data) => {
+            try {
+              const txt = typeof data === 'string' ? data : (data.text || '');
+              this.rules = JSON.parse(txt);
+              this.cgGroups = this.rules.cg_groups || [];
+              this.characters = this.rules.characters || [];
+              console.log('鉴赏规则加载成功:', this.cgGroups.length, '组,', this.characters.length, '角色');
+              this.initCG();
+              this.initChar();
+            } catch (e) {
+              console.error('规则解析失败:', e);
+            }
+          },
+          fail: (err) => console.error('规则加载失败:', err)
+        });
+      },
+
+      loadBackgrounds() {
+        file.readText({
+          uri: '/common/image-config.txt',
+          success: (data) => {
+            try {
+              const txt = typeof data === 'string' ? data : (data.text || '');
+              const cfg = JSON.parse(txt);
+              this.backgrounds = cfg.backgrounds || [];
+              this.currentBg = this.backgrounds[0] || '';
+            } catch (e) {
+              console.error('背景加载失败:', e);
+            }
+          },
+          fail: (err) => console.error('背景读取失败:', err)
+        });
+      },
+
+      initCG() {
+        if (this.cgGroups.length === 0) return;
+        this.updateCG();
+      },
+
+      updateCG() {
+        const g = this.cgGroups[this.cgGroupIndex];
+        if (!g) return;
+        this.currentGroupName = g.name;
+        this.currentGroupVariants = g.files.length;
+        if (this.cgVariantIndex >= g.files.length) this.cgVariantIndex = 0;
+        this.currentCG = '/common/evig/' + g.files[this.cgVariantIndex];
+      },
+
+      initChar() {
+        if (this.characters.length === 0) return;
+        this.updateChar();
+      },
+
+      updateChar() {
+        const ch = this.characters[this.charIndex];
+        if (!ch) return;
+        this.currentCharBodies = ch.bodies.length;
+        if (this.bodyIndex >= ch.bodies.length) this.bodyIndex = 0;
+        const body = ch.bodies[this.bodyIndex];
+        this.currentPose = body.pose || '1';
+        this.currentBodyName = body.dress || '';
+        // 表情: 只取当前身体 pose 配套的
+        // String() 容错: pose 可能是数字或字符串
+        const curPose = String(this.currentPose);
+        this.poseFaces = ch.faces.filter(f => String(f.pose || '1') === curPose);
+        this.currentCharFaces = this.poseFaces.length;
+        if (this.faceIndex >= this.poseFaces.length) this.faceIndex = 0;
+        this.currentChar = '/common/cimg/' + body.img;
+        const face = this.poseFaces[this.faceIndex];
+        if (face && face.img) {
+          this.currentFace = '/common/cimg/' + face.img;
+          this.faceX = Math.round((face.left - body.left) * this.scale);
+          this.faceY = Math.round((face.top - body.top) * this.scale);
+          this.faceW = Math.max(1, Math.round(face.w * this.scale)) || 50;
+          this.faceH = Math.max(1, Math.round(face.h * this.scale)) || 50;
+        } else {
+          this.currentFace = '';
+          this.faceX = 0; this.faceY = 0;
+        }
+        // detail 定位: 身体居中 + 脸对齐屏幕~130
+        this.bodyW = body.w || 100;
+        this.bodyH = body.h || 480;
+        this.bodyLeft = Math.max(0, Math.round((336 - this.bodyW) / 2));
+        this.bodyTop = Math.round(130 - this.faceY);
+        console.log('[cgs立绘]', ch.name, 'pose='+this.currentPose, 'body='+body.img,
+          'faceN='+this.poseFaces.length, 'faceIdx='+this.faceIndex,
+          'face='+(this.currentFace || '无'), 'fx='+this.faceX, 'fy='+this.faceY,
+          'bodyLeft='+this.bodyLeft, 'bodyTop='+this.bodyTop);
+      },
+
+      showcg() {
+        this.jump = false; this.cgshow = true; this.lhshow = false;
+        this.initCG();
+      },
+      showlh() {
+        this.jump = false; this.cgshow = false; this.lhshow = true;
+        this.initChar();
+      },
+
+      // CG 组切换
+      lastcgGroup() {
+        if (!this.cgGroups.length) return;
+        this.cgGroupIndex = (this.cgGroupIndex - 1 + this.cgGroups.length) % this.cgGroups.length;
+        this.cgVariantIndex = 0;
+        this.updateCG();
+      },
+      entercgGroup() {
+        if (!this.cgGroups.length) return;
+        this.cgGroupIndex = (this.cgGroupIndex + 1) % this.cgGroups.length;
+        this.cgVariantIndex = 0;
+        this.updateCG();
+      },
+      // CG 变体切换
+      lastcgVariant() {
+        const g = this.cgGroups[this.cgGroupIndex];
+        if (!g || !g.files.length) return;
+        this.cgVariantIndex = (this.cgVariantIndex - 1 + g.files.length) % g.files.length;
+        this.updateCG();
+      },
+      entercgVariant() {
+        const g = this.cgGroups[this.cgGroupIndex];
+        if (!g || !g.files.length) return;
+        this.cgVariantIndex = (this.cgVariantIndex + 1) % g.files.length;
+        this.updateCG();
+      },
+
+      // 立绘切换
+      lastlh() {
+        if (!this.characters.length) return;
+        this.charIndex = (this.charIndex - 1 + this.characters.length) % this.characters.length;
+        this.bodyIndex = 0; this.faceIndex = 0;
+        this.updateChar();
+      },
+      enterlh() {
+        if (!this.characters.length) return;
+        this.charIndex = (this.charIndex + 1) % this.characters.length;
+        this.bodyIndex = 0; this.faceIndex = 0;
+        this.updateChar();
+      },
+      lastBody() {
+        const ch = this.characters[this.charIndex];
+        if (!ch || !ch.bodies.length) return;
+        this.bodyIndex = (this.bodyIndex - 1 + ch.bodies.length) % ch.bodies.length;
+        this.updateChar();
+      },
+      enterBody() {
+        const ch = this.characters[this.charIndex];
+        if (!ch || !ch.bodies.length) return;
+        this.bodyIndex = (this.bodyIndex + 1) % ch.bodies.length;
+        this.updateChar();
+      },
+      lastFace() {
+        const ch = this.characters[this.charIndex];
+        if (!ch || !this.poseFaces.length) return;
+        this.faceIndex = (this.faceIndex - 1 + this.poseFaces.length) % this.poseFaces.length;
+        this.updateChar();
+      },
+      enterFace() {
+        const ch = this.characters[this.charIndex];
+        if (!ch || !this.poseFaces.length) return;
+        this.faceIndex = (this.faceIndex + 1) % this.poseFaces.length;
+        this.updateChar();
+      },
+
+      lastcgb() {
+        if (!this.backgrounds.length) return;
+        this.bgIndex = (this.bgIndex - 1 + this.backgrounds.length) % this.backgrounds.length;
+        this.currentBg = this.backgrounds[this.bgIndex];
+      },
+      entercgb() {
+        if (!this.backgrounds.length) return;
+        this.bgIndex = (this.bgIndex + 1) % this.backgrounds.length;
+        this.currentBg = this.backgrounds[this.bgIndex];
+      },
+
+      hidcgui() { this.cguishow = !this.cguishow; },
+      hidlhch() { this.lhchshow = !this.lhchshow; },
+      hidlhui() { this.lhuishow = !this.lhuishow; },
+
+      back() {
+        if (this.jump === true) {
+          router.back({ uri: 'pages/more' });
+        } else {
+          this.jump = true; this.cgshow = false; this.lhshow = false;
+        }
+      }
+    };
+  </script>
+
+  <style>
+    .page { background-color: #bbbbbb; flex-direction: column; justify-content: flex-start; align-items: center; width: 100%; height: 100%; position: relative; }
+    .info-container { position: absolute; flex-direction: column; align-items: center; bottom: 20px; }
+    .info-text { font-size: 16px; color: #c0c0c0; text-align: center; margin: 2px; }
+    .page2 { background-color: rgba(187,187,187,0); flex-direction: column; justify-content: flex-start; align-items: center; z-index: 1; width: 336px; height: 480px; position: absolute; top: 0; left: 0; }
+    .bcg { position: absolute; width: 336px; height: 480px; top: 0; left: 0; z-index: -1; object-fit: cover; }
+    .cgimg { position: absolute; width: 100%; height: 100%; top: 0; left: 0; object-fit: contain; background-color: #000000; z-index: 1; }
+    .character { position: absolute; top: 40px; left: 50px; z-index: 3 }
+    .backgroundimg { position: absolute; width: 336px; height: 480px; top: 0; left: 0; object-fit: cover; z-index: 2; }
+    .faceimg { position: absolute; z-index: 4}
+    .bt { position: absolute; bottom: 0; z-index: 10; }
+    .hd { position: absolute; top: 0; z-index: 10; }
+    .header {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+}
+    .title { 
+    margin-top: 20px;
+    font-size: 36px;
+    color: #ebebeb;
+    font-weight: bold;
+} 
+    .content {
+    flex-direction: column;
+    align-items: center;
+    width: 90%;
+    background-color: rgba(255, 255, 255, 0.726);
+    border-radius: 15px;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    margin:15px;
+    }
+    /* 中部文字 */
+    .mid{
+      font-size: 35px;
+      color: #000;
+      font-weight: 800;
+    }
+    .lh-wrap { position: absolute; width: 336px; height: 480px; top: 0; left: 0; overflow: hidden; }
+    .last-btn { position: absolute; left: 15px; bottom: 15px; z-index: 10; }
+    .enter-btn { position: absolute; right: 15px; bottom: 15px; z-index: 10; }
+    .last-btn2 { position: absolute; left: 15px; bottom: 85px; z-index: 10; }
+    .enter-btn2 { position: absolute; right: 15px; bottom: 85px; z-index: 10; }
+    .last-btn1 { position: absolute; left: 15px; bottom: 155px; z-index: 10; }
+    .enter-btn1 { position: absolute; right: 15px; bottom: 155px; z-index: 10; }
+    .last-btn3 { position: absolute; left: 15px; bottom: 225px; z-index: 10; }
+    .enter-btn3 { position: absolute; right: 15px; bottom: 225px; z-index: 10; }
+    .back-btn { position: absolute; top: 15px; left: 15px;  z-index: 10; }
+  </style>
